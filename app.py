@@ -44,12 +44,20 @@ if 'no_hand_start_time' not in st.session_state:
     st.session_state.no_hand_start_time = None
 if 'last_added_letter' not in st.session_state:
     st.session_state.last_added_letter = ""
+if 'hands_detector' not in st.session_state:
+    st.session_state.hands_detector = None
 
 # ─── Thread-safe Shared State ──────────────────────────────
 class SharedState:
     """Thread-safe container to pass predictions from callback thread to main thread."""
     def __init__(self):
-        self._result = {"prediction": "", "confidence": 0.0, "hand_detected": False}
+        self._result = {
+            "prediction": "",
+            "candidate": "",
+            "confidence": 0.0,
+            "hand_detected": False,
+            "multiple_hands": False,
+        }
         self._lock = threading.Lock()
         self._buffer = deque(maxlen=PREDICTION_SMOOTHING_WINDOW)
         self._flip = True
@@ -233,12 +241,14 @@ st.markdown(f"""
 
 # ─── Load Resources ─────────────────────────────────────────
 model = load_model()
-detector = None
-try:
-    detector = create_hands_detector()
-except Exception as e:
-    logging.exception("MediaPipe initialization error: %s", e)
-    st.error("Hand tracking could not be initialized. Please try again later.")
+detector = st.session_state.hands_detector
+if detector is None:
+    try:
+        detector = create_hands_detector()
+        st.session_state.hands_detector = detector
+    except Exception as e:
+        logging.exception("MediaPipe initialization error: %s", e)
+        st.error("Hand tracking could not be initialized. Please try again later.")
 
 # ─── Video Callback ─────────────────────────────────────────
 def video_frame_callback(frame):
@@ -288,8 +298,10 @@ with col_feed:
         },
         async_processing=True,
     )
-    if not webrtc_ctx.state.playing:
-        st.info("Camera is not active. Click Start and allow camera access in your browser. If access was denied, enable it in the browser site settings and reload the page.")
+    if webrtc_ctx.state.signalling:
+        st.info("Connecting to camera...")
+    elif not webrtc_ctx.state.playing:
+        st.warning("Camera connection is not active. Click Start and allow camera access in your browser. If the connection failed, refresh the page and try again.")
 
 with col_predict:
     # Prediction Results
@@ -325,21 +337,17 @@ with col_predict:
 # ─── Button Actions ─────────────────────────────────────────
 if continue_btn and st.session_state.last_prediction:
     st.session_state.word = add_letter(st.session_state.word, st.session_state.last_prediction)
-    st.rerun()
 
 if end_btn and st.session_state.word:
     st.session_state.word, st.session_state.completed_words = complete_word(
         st.session_state.word, st.session_state.completed_words
     )
-    st.rerun()
 
 if delete_btn and st.session_state.word:
     st.session_state.word = delete_letter(st.session_state.word)
-    st.rerun()
 
 if clear_btn:
     st.session_state.word, st.session_state.completed_words = clear_text()
-    st.rerun()
 
 # ─── UI Updates ─────────────────────────────────────────────
 if st.session_state.completed_words:

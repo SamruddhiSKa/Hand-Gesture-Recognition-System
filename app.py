@@ -72,8 +72,10 @@ class SharedState:
                 most_common = Counter(self._buffer).most_common(1)[0][0]
                 self._result = {
                     "prediction": most_common,
+                    "candidate": raw_result.get("candidate", ""),
                     "confidence": raw_result["confidence"],
                     "hand_detected": raw_result["hand_detected"],
+                    "multiple_hands": raw_result.get("multiple_hands", False),
                 }
             else:
                 self._result = raw_result
@@ -359,138 +361,112 @@ if st.session_state.completed_words:
     </div>
     """, unsafe_allow_html=True)
 
-# ─── Constants for Auto-Capture ────────────────────────────
+# ─── Live Status Refresh ───────────────────────────────────
 HOLD_REQUIRED = HOLD_REQUIRED_SECONDS
 COOLDOWN_REQUIRED = COOLDOWN_REQUIRED_SECONDS
 NO_HAND_TIMEOUT = NO_HAND_TIMEOUT_SECONDS
 
-is_active = webrtc_ctx.state.playing if webrtc_ctx else False
 
-if is_active:
-    while True:
-        if not webrtc_ctx.state.playing: break
-        
-        now = time.time()
-        result = shared.get()
-        pred = result.get("prediction", "")
-        candidate = result.get("candidate", "")
-        hand_visible = result.get("hand_detected", False)
-        multiple_hands = result.get("multiple_hands", False)
+@st.fragment(run_every="100ms")
+def render_live_status():
+    """Refresh status UI without blocking or recreating the WebRTC component."""
+    now = time.time()
+    result = shared.get()
+    pred = result.get("prediction", "")
+    candidate = result.get("candidate", "")
+    hand_visible = result.get("hand_detected", False)
+    multiple_hands = result.get("multiple_hands", False)
 
-        # 1. Handle Cooldown
-        if st.session_state.is_cooling_down:
-            elapsed = now - st.session_state.cooldown_start_time
-            if elapsed >= COOLDOWN_REQUIRED:
-                st.session_state.is_cooling_down = False
-            
-        # 2. Handle Hand Visibility & Logic
-        if multiple_hands:
-            st.session_state.hold_start_time = None
-            st.session_state.last_prediction = ""
-            prediction_placeholder.markdown("""
-            <div class="prediction-letter" style="color: #E67E22;">!</div>
-            <div class="status-box status-no-hand">Use one hand</div>
-            """, unsafe_allow_html=True)
-        elif hand_visible:
-            st.session_state.no_hand_start_time = None # Reset auto-end timer
-            
-            if not st.session_state.is_cooling_down:
-                if pred and pred == st.session_state.last_prediction:
-                    if st.session_state.hold_start_time is None:
-                        st.session_state.hold_start_time = now
-                    
-                    hold_elapsed = now - st.session_state.hold_start_time
-                    progress = min(hold_elapsed / HOLD_REQUIRED, 1.0)
-                    
-                    if progress >= 1.0:
-                        # TRIGGER CAPTURE (No st.rerun here)
-                        st.session_state.word = add_letter(st.session_state.word, pred)
-                        st.session_state.is_cooling_down = True
-                        st.session_state.cooldown_start_time = now
-                        st.session_state.hold_start_time = None
-                else:
+    if not webrtc_ctx.state.playing:
+        prediction_placeholder.markdown(
+            "<div class='status-box status-inactive'>Camera connection is starting...</div>",
+            unsafe_allow_html=True,
+        )
+        word_placeholder.markdown(
+            "<div class='word-display'><div class='word-text-empty'>-</div></div>",
+            unsafe_allow_html=True,
+        )
+        return
+
+    if st.session_state.is_cooling_down and now - st.session_state.cooldown_start_time >= COOLDOWN_REQUIRED:
+        st.session_state.is_cooling_down = False
+
+    if multiple_hands:
+        st.session_state.hold_start_time = None
+        st.session_state.last_prediction = ""
+    elif hand_visible:
+        st.session_state.no_hand_start_time = None
+        if not st.session_state.is_cooling_down:
+            if pred and pred == st.session_state.last_prediction:
+                if st.session_state.hold_start_time is None:
                     st.session_state.hold_start_time = now
-            
-            st.session_state.last_prediction = pred
-        else:
-            st.session_state.hold_start_time = None
-            if st.session_state.no_hand_start_time is None:
-                st.session_state.no_hand_start_time = now
-            
-            absent_elapsed = now - st.session_state.no_hand_start_time
-            if absent_elapsed >= NO_HAND_TIMEOUT and st.session_state.word:
-                # TRIGGER AUTO-END (No st.rerun here)
-                st.session_state.word, st.session_state.completed_words = complete_word(
-                    st.session_state.word, st.session_state.completed_words
-                )
-                st.session_state.no_hand_start_time = None
-
-        # ─── UPDATE UI MANUALLY (Fluid Updates) ───────────────
-        
-        # Prediction Panel
-        if multiple_hands:
-            pass
-        elif hand_visible and pred:
-            if st.session_state.is_cooling_down:
-                prediction_placeholder.markdown(f"""
-                <div class="prediction-letter" style="color: #2E86C1;">{pred}</div>
-                <div class="cooldown-status" style="color: #27AE60;">ADDED! {pred}</div>
-                """, unsafe_allow_html=True)
+                hold_elapsed = now - st.session_state.hold_start_time
+                if hold_elapsed >= HOLD_REQUIRED:
+                    st.session_state.word = add_letter(st.session_state.word, pred)
+                    st.session_state.is_cooling_down = True
+                    st.session_state.cooldown_start_time = now
+                    st.session_state.hold_start_time = None
             else:
-                hold_elapsed = (now - st.session_state.hold_start_time) if st.session_state.hold_start_time else 0
-                pct = min(int((hold_elapsed / HOLD_REQUIRED) * 100), 100)
-                remaining = max(0, int(HOLD_REQUIRED - hold_elapsed))
-                prediction_placeholder.markdown(f"""
-                <div class="prediction-letter">{pred}</div>
-                <div class="prediction-label">Confidence {result.get('confidence', 0):.1f}%</div>
-                <div class="auto-status">Hold {remaining}s more...</div>
-                <div class="progress-container"><div class="progress-fill" style="width: {pct}%;"></div></div>
-                """, unsafe_allow_html=True)
-        elif hand_visible and candidate:
-            prediction_placeholder.markdown("""
-            <div class="prediction-letter" style="color: #E67E22;">?</div>
-            <div class="status-box status-no-hand">Gesture unclear</div>
-            <div class="auto-status">Move your hand into a clearer pose</div>
-            """, unsafe_allow_html=True)
-        elif hand_visible:
-            prediction_placeholder.markdown("""
-            <div class="prediction-letter" style="color: #D5DBDB;">?</div>
-            <div class="status-box status-no-hand">Detecting gesture...</div>
-            """, unsafe_allow_html=True)
-        else:
-            if st.session_state.word:
-                absent_e = now - st.session_state.no_hand_start_time
-                rem = max(0, int(NO_HAND_TIMEOUT - absent_e))
-                prediction_placeholder.markdown(f"""
-                <div class="prediction-letter" style="color: #D5DBDB;">—</div>
-                <div class="status-box status-no-hand">Hand Lost</div>
-                <div class="auto-status">Finishing in {rem}s...</div>
-                """, unsafe_allow_html=True)
-            else:
-                prediction_placeholder.markdown("""
-                <div class="prediction-letter" style="color: #D5DBDB;">—</div>
-                <div class="status-box status-no-hand">Waiting for Hand</div>
-                """, unsafe_allow_html=True)
+                st.session_state.hold_start_time = now
+        st.session_state.last_prediction = pred
+    else:
+        st.session_state.hold_start_time = None
+        if st.session_state.no_hand_start_time is None:
+            st.session_state.no_hand_start_time = now
+        if now - st.session_state.no_hand_start_time >= NO_HAND_TIMEOUT and st.session_state.word:
+            st.session_state.word, st.session_state.completed_words = complete_word(
+                st.session_state.word, st.session_state.completed_words
+            )
+            st.session_state.no_hand_start_time = None
 
-        # Word Builder (Update instantly in loop)
-        curr = st.session_state.word
-        if curr:
-            word_placeholder.markdown(f"<div class='word-display'><div class='word-text'>{curr.upper()}</div></div>", unsafe_allow_html=True)
-        else:
-            word_placeholder.markdown("<div class='word-display'><div class='word-text-empty'>Ready</div></div>", unsafe_allow_html=True)
+    if multiple_hands:
+        prediction_placeholder.markdown(
+            "<div class='prediction-letter' style='color: #E67E22;'>!</div><div class='status-box status-no-hand'>Use one hand</div>",
+            unsafe_allow_html=True,
+        )
+    elif hand_visible and pred:
+        hold_elapsed = (now - st.session_state.hold_start_time) if st.session_state.hold_start_time else 0
+        pct = min(int((hold_elapsed / HOLD_REQUIRED) * 100), 100)
+        prediction_placeholder.markdown(
+            f"<div class='prediction-letter'>{pred}</div><div class='prediction-label'>Confidence {result.get('confidence', 0):.1f}%</div><div class='auto-status'>Hold {max(0, int(HOLD_REQUIRED - hold_elapsed))}s more...</div><div class='progress-container'><div class='progress-fill' style='width: {pct}%;'></div></div>",
+            unsafe_allow_html=True,
+        )
+    elif hand_visible and candidate:
+        prediction_placeholder.markdown(
+            "<div class='prediction-letter' style='color: #E67E22;'>?</div><div class='status-box status-no-hand'>Gesture unclear</div><div class='auto-status'>Move your hand into a clearer pose</div>",
+            unsafe_allow_html=True,
+        )
+    elif hand_visible:
+        prediction_placeholder.markdown(
+            "<div class='prediction-letter' style='color: #D5DBDB;'>?</div><div class='status-box status-no-hand'>Detecting gesture...</div>",
+            unsafe_allow_html=True,
+        )
+    elif st.session_state.word:
+        remaining = max(0, int(NO_HAND_TIMEOUT - (now - st.session_state.no_hand_start_time)))
+        prediction_placeholder.markdown(
+            f"<div class='prediction-letter' style='color: #D5DBDB;'>-</div><div class='status-box status-no-hand'>Hand Lost</div><div class='auto-status'>Finishing in {remaining}s...</div>",
+            unsafe_allow_html=True,
+        )
+    else:
+        prediction_placeholder.markdown(
+            "<div class='prediction-letter' style='color: #D5DBDB;'>-</div><div class='status-box status-no-hand'>Waiting for Hand</div>",
+            unsafe_allow_html=True,
+        )
 
-        # History / Sentences (Update instantly in loop)
-        if st.session_state.completed_words:
-            sentence = " | ".join(st.session_state.completed_words)
-            completed_placeholder.markdown(f"""
-            <div class="card" style="margin-top: 5px; border-color: #27AE60;">
-                <div class="word-label" style="color: #27AE60;">Completed Sentences</div>
-                <div style="font-size: 0.9rem; font-weight: 600;">{sentence}</div>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        time.sleep(0.1)
-else:
-    prediction_placeholder.markdown("<div class='status-box status-inactive'>Waiting for Camera</div>", unsafe_allow_html=True)
-    word_placeholder.markdown("<div class='word-display'><div class='word-text-empty'>—</div></div>", unsafe_allow_html=True)
+    current_word = st.session_state.word
+    word_placeholder.markdown(
+        f"<div class='word-display'><div class='word-text'>{current_word.upper()}</div></div>"
+        if current_word
+        else "<div class='word-display'><div class='word-text-empty'>Ready</div></div>",
+        unsafe_allow_html=True,
+    )
+    if st.session_state.completed_words:
+        sentence = " | ".join(st.session_state.completed_words)
+        completed_placeholder.markdown(
+            f"<div class='card' style='margin-top: 5px; border-color: #27AE60;'><div class='word-label' style='color: #27AE60;'>Completed Sentences</div><div style='font-size: 0.9rem; font-weight: 600;'>{sentence}</div></div>",
+            unsafe_allow_html=True,
+        )
+
+
+render_live_status()
 

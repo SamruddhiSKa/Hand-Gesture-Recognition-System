@@ -93,14 +93,14 @@
     }
   },
   "performance": {
-    "mean_ms": 3.6325602450229706,
-    "median_ms": 3.2107,
-    "p95_ms": 5.58378,
-    "p99_ms": 7.983536000000002,
-    "min_ms": 2.3425,
-    "max_ms": 44.9398,
-    "rows_per_second": 275.2879326282657,
-    "rows_per_minute": 16517.275957695943,
+    "mean_ms": 3.3953871362940276,
+    "median_ms": 3.065,
+    "p95_ms": 5.040739999999998,
+    "p99_ms": 6.848740000000004,
+    "min_ms": 2.1076,
+    "max_ms": 41.1702,
+    "rows_per_second": 294.51722582994546,
+    "rows_per_minute": 17671.033549796728,
     "timing_samples": 3265,
     "repeats": 5
   },
@@ -115,6 +115,9 @@
     "accuracy_percent": 95.86523736600306,
     "macro_f1": 0.9517592703051277,
     "weighted_f1": 0.9581162247750432,
+    "confidence_threshold": 0.75,
+    "accepted_coverage_percent": 75.65084226646248,
+    "accepted_accuracy_percent": 100.0,
     "per_class": {
       "0": {
         "precision": 0.75,

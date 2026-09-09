@@ -9,7 +9,14 @@ from collections import deque, Counter
 from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
 from core.model_manager import load_model
 from core.hand_processor import create_hands_detector, process_frame
+from core.text_state import add_letter, clear_text, complete_word, delete_letter
 from config.settings import WEBRTC_STUN_SERVERS, APP_TITLE, APP_DESCRIPTION, APP_ICON
+from config.settings import (
+    COOLDOWN_REQUIRED_SECONDS,
+    HOLD_REQUIRED_SECONDS,
+    NO_HAND_TIMEOUT_SECONDS,
+    PREDICTION_SMOOTHING_WINDOW,
+)
 
 # ─── Page Config ────────────────────────────────────────────
 st.set_page_config(page_title=APP_TITLE, page_icon=APP_ICON, layout="wide")
@@ -44,13 +51,15 @@ class SharedState:
     def __init__(self):
         self._result = {"prediction": "", "confidence": 0.0, "hand_detected": False}
         self._lock = threading.Lock()
-        self._buffer = deque(maxlen=5) # Reduced for faster response
+        self._buffer = deque(maxlen=PREDICTION_SMOOTHING_WINDOW)
         self._flip = True
 
     def update(self, raw_result):
         with self._lock:
-            if raw_result["prediction"]:
+            if raw_result.get("prediction"):
                 self._buffer.append(raw_result["prediction"])
+            else:
+                self._buffer.clear()
             if self._buffer:
                 most_common = Counter(self._buffer).most_common(1)[0][0]
                 self._result = {
@@ -304,25 +313,32 @@ with col_predict:
         continue_btn = st.button("✚ Add Letter", use_container_width=True)
     with b_col2:
         end_btn = st.button("✔ End Word", use_container_width=True)
-    
-    clear_btn = st.button("✕ Clear All", use_container_width=True)
+    d_col1, d_col2 = st.columns(2)
+    with d_col1:
+        delete_btn = st.button("⌫ Delete Letter", use_container_width=True)
+    with d_col2:
+        clear_btn = st.button("✕ Clear All", use_container_width=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
     completed_placeholder = st.empty()
 
 # ─── Button Actions ─────────────────────────────────────────
 if continue_btn and st.session_state.last_prediction:
-    st.session_state.word += st.session_state.last_prediction
+    st.session_state.word = add_letter(st.session_state.word, st.session_state.last_prediction)
     st.rerun()
 
 if end_btn and st.session_state.word:
-    st.session_state.completed_words.append(st.session_state.word)
-    st.session_state.word = ""
+    st.session_state.word, st.session_state.completed_words = complete_word(
+        st.session_state.word, st.session_state.completed_words
+    )
+    st.rerun()
+
+if delete_btn and st.session_state.word:
+    st.session_state.word = delete_letter(st.session_state.word)
     st.rerun()
 
 if clear_btn:
-    st.session_state.word = ""
-    st.session_state.completed_words = []
+    st.session_state.word, st.session_state.completed_words = clear_text()
     st.rerun()
 
 # ─── UI Updates ─────────────────────────────────────────────
@@ -336,9 +352,9 @@ if st.session_state.completed_words:
     """, unsafe_allow_html=True)
 
 # ─── Constants for Auto-Capture ────────────────────────────
-HOLD_REQUIRED = 15.0 # Seconds to hold gesture
-COOLDOWN_REQUIRED = 3.0 # Seconds before next capture
-NO_HAND_TIMEOUT = 12.0 # Seconds of no hand to end word
+HOLD_REQUIRED = HOLD_REQUIRED_SECONDS
+COOLDOWN_REQUIRED = COOLDOWN_REQUIRED_SECONDS
+NO_HAND_TIMEOUT = NO_HAND_TIMEOUT_SECONDS
 
 is_active = webrtc_ctx.state.playing if webrtc_ctx else False
 
@@ -349,7 +365,9 @@ if is_active:
         now = time.time()
         result = shared.get()
         pred = result.get("prediction", "")
+        candidate = result.get("candidate", "")
         hand_visible = result.get("hand_detected", False)
+        multiple_hands = result.get("multiple_hands", False)
 
         # 1. Handle Cooldown
         if st.session_state.is_cooling_down:
@@ -358,7 +376,14 @@ if is_active:
                 st.session_state.is_cooling_down = False
             
         # 2. Handle Hand Visibility & Logic
-        if hand_visible:
+        if multiple_hands:
+            st.session_state.hold_start_time = None
+            st.session_state.last_prediction = ""
+            prediction_placeholder.markdown("""
+            <div class="prediction-letter" style="color: #E67E22;">!</div>
+            <div class="status-box status-no-hand">Use one hand</div>
+            """, unsafe_allow_html=True)
+        elif hand_visible:
             st.session_state.no_hand_start_time = None # Reset auto-end timer
             
             if not st.session_state.is_cooling_down:
@@ -371,7 +396,7 @@ if is_active:
                     
                     if progress >= 1.0:
                         # TRIGGER CAPTURE (No st.rerun here)
-                        st.session_state.word += pred
+                        st.session_state.word = add_letter(st.session_state.word, pred)
                         st.session_state.is_cooling_down = True
                         st.session_state.cooldown_start_time = now
                         st.session_state.hold_start_time = None
@@ -387,14 +412,17 @@ if is_active:
             absent_elapsed = now - st.session_state.no_hand_start_time
             if absent_elapsed >= NO_HAND_TIMEOUT and st.session_state.word:
                 # TRIGGER AUTO-END (No st.rerun here)
-                st.session_state.completed_words.append(st.session_state.word)
-                st.session_state.word = ""
+                st.session_state.word, st.session_state.completed_words = complete_word(
+                    st.session_state.word, st.session_state.completed_words
+                )
                 st.session_state.no_hand_start_time = None
 
         # ─── UPDATE UI MANUALLY (Fluid Updates) ───────────────
         
         # Prediction Panel
-        if hand_visible and pred:
+        if multiple_hands:
+            pass
+        elif hand_visible and pred:
             if st.session_state.is_cooling_down:
                 prediction_placeholder.markdown(f"""
                 <div class="prediction-letter" style="color: #2E86C1;">{pred}</div>
@@ -406,13 +434,20 @@ if is_active:
                 remaining = max(0, int(HOLD_REQUIRED - hold_elapsed))
                 prediction_placeholder.markdown(f"""
                 <div class="prediction-letter">{pred}</div>
+                <div class="prediction-label">Confidence {result.get('confidence', 0):.1f}%</div>
                 <div class="auto-status">Hold {remaining}s more...</div>
                 <div class="progress-container"><div class="progress-fill" style="width: {pct}%;"></div></div>
                 """, unsafe_allow_html=True)
+        elif hand_visible and candidate:
+            prediction_placeholder.markdown("""
+            <div class="prediction-letter" style="color: #E67E22;">?</div>
+            <div class="status-box status-no-hand">Gesture unclear</div>
+            <div class="auto-status">Move your hand into a clearer pose</div>
+            """, unsafe_allow_html=True)
         elif hand_visible:
             prediction_placeholder.markdown("""
             <div class="prediction-letter" style="color: #D5DBDB;">?</div>
-            <div class="status-box status-no-hand">Position Hand...</div>
+            <div class="status-box status-no-hand">Detecting gesture...</div>
             """, unsafe_allow_html=True)
         else:
             if st.session_state.word:

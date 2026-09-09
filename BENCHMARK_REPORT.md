@@ -29,14 +29,14 @@ Warm `RandomForestClassifier.predict()` was measured one row at a time on the 65
 
 | Metric | Measured result |
 | --- | ---: |
-| Mean latency | 3.6326 ms/row |
-| Median latency | 3.2107 ms/row |
-| P95 latency | 5.5838 ms/row |
-| P99 latency | 7.9835 ms/row |
-| Minimum latency | 2.3425 ms/row |
-| Maximum latency | 44.9398 ms/row |
-| Throughput derived from mean | 275.29 rows/second |
-| Throughput derived from mean | 16,517.28 rows/minute |
+- Mean latency | 3.3954 ms/row |
+- Median latency | 3.0650 ms/row |
+- P95 latency | 5.0407 ms/row |
+- P99 latency | 6.8487 ms/row |
+- Minimum latency | 2.1076 ms/row |
+- Maximum latency | 41.1702 ms/row |
+- Throughput derived from mean | 294.52 rows/second |
+- Throughput derived from mean | 17,671.03 rows/minute |
 
 These are classifier-only figures. They are not end-to-end frame-processing FPS.
 
@@ -52,6 +52,9 @@ On the held-out rows:
 - Accuracy: 95.8652%
 - Macro F1: 0.951759
 - Weighted F1: 0.958116
+- Confidence rejection threshold: 75%
+- Accepted prediction coverage: 75.65%
+- Accuracy among accepted predictions: 100.0000%
 
 Per-class precision, recall, F1, support, and the confusion matrix are in `benchmark_results.json`.
 
@@ -80,14 +83,15 @@ This is a sanity-check baseline, not evidence of an optimization improvement ove
 
 1. **95.8652% held-out accuracy across 653 test landmark samples and 36 classes.** Measured by comparing model predictions with labels from a deterministic stratified 20% split.
 2. **0.951759 macro F1 across 36 classes.** Calculated with scikit-learn from the same held-out predictions, giving each class equal weight.
-3. **3.2107 ms median warm classifier inference latency per landmark row.** Measured with `time.perf_counter_ns()` over 3,265 per-row prediction timings after warm-up.
-4. **275.29 landmark predictions/second derived from mean latency.** Calculated as `1000 / mean_latency_ms`; this is local classifier throughput, not application FPS.
+3. **3.0650 ms median warm classifier inference latency per landmark row.** Measured with `time.perf_counter_ns()` over 3,265 per-row prediction timings after warm-up.
+4. **294.52 landmark predictions/second derived from mean latency.** Calculated as `1000 / mean_latency_ms`; this is local classifier throughput, not application FPS.
+5. **75.65% accepted-prediction coverage at a 75% confidence threshold, with 100.0000% accuracy on accepted held-out rows.** The remaining rows are presented as unclear rather than forced into a class.
 
 ## Resume Bullets
 
 - Engineered a Python, MediaPipe, and scikit-learn hand-gesture recognition system covering 36 alphabet and digit classes, achieving 95.8652% accuracy across 653 held-out landmark samples.
 - Developed a Random Forest landmark classifier with 0.951759 macro F1 on a deterministic stratified evaluation split, supporting per-class gesture quality analysis.
-- Integrated warm landmark inference into a Streamlit/WebRTC application, measuring 3.2107 ms median classifier latency per input row and 275.29 derived predictions per second locally.
+- Integrated warm landmark inference into a Streamlit/WebRTC application, measuring 3.0650 ms median classifier latency per input row and 294.52 derived predictions per second locally.
 
 ## Methodology
 

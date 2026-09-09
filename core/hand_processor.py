@@ -14,6 +14,7 @@ except:
     import mediapipe.python.solutions.drawing_styles as mp_styles
 
 from config.settings import (
+    GESTURE_CONFIDENCE_THRESHOLD,
     MEDIAPIPE_MAX_HANDS,
     MEDIAPIPE_MIN_DETECTION_CONFIDENCE,
     MEDIAPIPE_MIN_TRACKING_CONFIDENCE,
@@ -58,7 +59,13 @@ def process_frame(frame, detector, model, flip=True):
     if flip:
         frame = cv2.flip(frame, 1) # horizontal flip for selfie view
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    result = {"prediction": "", "confidence": 0.0, "hand_detected": False}
+    result = {
+        "prediction": "",
+        "candidate": "",
+        "confidence": 0.0,
+        "hand_detected": False,
+        "multiple_hands": False,
+    }
 
     try:
         results = detector.process(rgb)
@@ -67,6 +74,9 @@ def process_frame(frame, detector, model, flip=True):
         return frame, result
 
     if results.multi_hand_landmarks:
+        if len(results.multi_hand_landmarks) > 1:
+            result["multiple_hands"] = True
+            return frame, result
         result["hand_detected"] = True
         for hand_landmarks in results.multi_hand_landmarks:
             # Draw landmarks
@@ -81,13 +91,19 @@ def process_frame(frame, detector, model, flip=True):
             if model is not None:
                 try:
                     prediction = model.predict(features)[0]
-                    result["prediction"] = str(prediction)
+                    result["candidate"] = str(prediction)
+                except Exception as e:
+                    logger.exception("Gesture prediction error: %s", e)
+                    continue
+
+                try:
                     probas = model.predict_proba(features)[0]
                     result["confidence"] = round(float(np.max(probas)) * 100, 1)
                 except AttributeError:
-                    result["confidence"] = 0.0
-                except Exception as e:
-                    logger.exception("Gesture prediction error: %s", e)
+                    result["confidence"] = 100.0
+
+                if result["confidence"] >= GESTURE_CONFIDENCE_THRESHOLD * 100:
+                    result["prediction"] = result["candidate"]
 
     # Draw result on frame
     if result["prediction"]:

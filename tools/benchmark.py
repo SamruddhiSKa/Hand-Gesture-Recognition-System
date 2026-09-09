@@ -25,6 +25,7 @@ DEFAULT_DATASET = ROOT_DIR / "landmark_dataset.csv"
 DEFAULT_MODEL = ROOT_DIR / "models" / "gesture_model.pkl"
 RANDOM_STATE = 42
 TEST_SIZE = 0.2
+CONFIDENCE_THRESHOLD = 0.75
 
 
 def percentile(values: list[float], value: float) -> float:
@@ -96,6 +97,9 @@ def build_report(result: dict) -> str:
         f"Accuracy: {quality['accuracy_percent']:.4f}%",
         f"Macro F1: {quality['macro_f1']:.6f}",
         f"Weighted F1: {quality['weighted_f1']:.6f}",
+        f"Confidence threshold: {quality['confidence_threshold']:.0%}",
+        f"Accepted prediction coverage: {quality['accepted_coverage_percent']:.4f}%",
+        f"Accepted prediction accuracy: {quality['accepted_accuracy_percent']:.4f}%",
         f"Majority baseline accuracy: {result['baseline']['accuracy_percent']:.4f}%",
         f"Absolute accuracy lift vs majority baseline: {result['baseline']['absolute_accuracy_lift_percentage_points']:.4f} percentage points",
         "Per-class metrics and confusion matrix are included in benchmark_results.json.",
@@ -130,6 +134,9 @@ def run_benchmark(dataset_path: Path, model_path: Path, repeats: int) -> dict:
     correct = int(np.sum(predictions == test_labels.to_numpy()))
     total = len(test_labels)
     report = classification_report(test_labels, predictions, output_dict=True, zero_division=0)
+    probabilities = model.predict_proba(test_features).max(axis=1)
+    accepted = probabilities >= CONFIDENCE_THRESHOLD
+    accepted_accuracy = float(accuracy_score(test_labels.to_numpy()[accepted], predictions[accepted]))
 
     majority = DummyClassifier(strategy="most_frequent")
     majority.fit(features, labels)
@@ -179,6 +186,9 @@ def run_benchmark(dataset_path: Path, model_path: Path, repeats: int) -> dict:
             "accuracy_percent": report["accuracy"] * 100,
             "macro_f1": report["macro avg"]["f1-score"],
             "weighted_f1": report["weighted avg"]["f1-score"],
+            "confidence_threshold": CONFIDENCE_THRESHOLD,
+            "accepted_coverage_percent": float(np.mean(accepted) * 100),
+            "accepted_accuracy_percent": accepted_accuracy * 100,
             "per_class": {
                 str(key): value for key, value in report.items() if key not in {"accuracy", "macro avg", "weighted avg"}
             },

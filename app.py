@@ -61,6 +61,31 @@ class SharedState:
         self._lock = threading.Lock()
         self._buffer = deque(maxlen=PREDICTION_SMOOTHING_WINDOW)
         self._flip = True
+        self._frames_received = 0
+        self._last_error = ""
+        self._video_ended = False
+
+    def mark_frame_received(self):
+        with self._lock:
+            self._frames_received += 1
+            self._last_error = ""
+            self._video_ended = False
+
+    def mark_error(self, message):
+        with self._lock:
+            self._last_error = message
+
+    def mark_video_ended(self):
+        with self._lock:
+            self._video_ended = True
+
+    def get_diagnostics(self):
+        with self._lock:
+            return {
+                "frames_received": self._frames_received,
+                "last_error": self._last_error,
+                "video_ended": self._video_ended,
+            }
 
     def update(self, raw_result):
         with self._lock:
@@ -255,6 +280,7 @@ if detector is None:
 # ─── Video Callback ─────────────────────────────────────────
 def video_frame_callback(frame):
     try:
+        shared.mark_frame_received()
         img = frame.to_ndarray(format="bgr24")
         if detector is None or model is None:
             return frame
@@ -265,8 +291,14 @@ def video_frame_callback(frame):
         shared.update(result)
         return av.VideoFrame.from_ndarray(annotated_frame, format="bgr24")
     except Exception as e:
-        logging.error(f"Error in callback: {e}")
+        shared.mark_error("Frame processor error")
+        logging.exception("Error in callback: %s", e)
         return frame
+
+
+def on_video_ended():
+    shared.mark_video_ended()
+    logging.info("WebRTC video track ended")
 
 # ─── Main Layout ────────────────────────────────────────────
 col_feed, col_predict = st.columns([1.5, 1])
@@ -299,6 +331,7 @@ with col_feed:
             "audio": False
         },
         async_processing=True,
+        on_video_ended=on_video_ended,
     )
     if webrtc_ctx.state.signalling:
         st.info("Connecting to camera...")
@@ -367,7 +400,7 @@ COOLDOWN_REQUIRED = COOLDOWN_REQUIRED_SECONDS
 NO_HAND_TIMEOUT = NO_HAND_TIMEOUT_SECONDS
 
 
-@st.fragment(run_every="100ms")
+@st.fragment(run_every="500ms")
 def render_live_status():
     """Refresh status UI without blocking or recreating the WebRTC component."""
     now = time.time()
@@ -376,10 +409,26 @@ def render_live_status():
     candidate = result.get("candidate", "")
     hand_visible = result.get("hand_detected", False)
     multiple_hands = result.get("multiple_hands", False)
+    diagnostics = shared.get_diagnostics()
+
+    if webrtc_ctx.state.signalling:
+        connection_status = "Connecting to camera..."
+    elif webrtc_ctx.state.playing:
+        connection_status = "Camera connected"
+    elif diagnostics["last_error"] or diagnostics["video_ended"]:
+        connection_status = "Camera connection failed - check camera permissions/network."
+    else:
+        connection_status = "Requesting camera access..."
+
+    st.caption(
+        f"WebRTC: {connection_status} | ICE: browser-managed STUN | "
+        f"Processor: {'active' if diagnostics['frames_received'] else 'waiting'} | "
+        f"Frames received: {diagnostics['frames_received']}"
+    )
 
     if not webrtc_ctx.state.playing:
         prediction_placeholder.markdown(
-            "<div class='status-box status-inactive'>Camera connection is starting...</div>",
+            f"<div class='status-box status-inactive'>{connection_status}</div>",
             unsafe_allow_html=True,
         )
         word_placeholder.markdown(

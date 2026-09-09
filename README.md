@@ -26,7 +26,7 @@ A real-time hand gesture recognition app that converts hand signs into text usin
 
 ## Requirements
 
-Python 3.11.8 is used by the deployed and verified environment.
+Python 3.12 is the deployment target because MediaPipe 0.10.18 provides a Linux CPython 3.12 wheel.
 
 Install the required dependencies:
 
@@ -70,7 +70,7 @@ Then:
 4. Deploy the app. Streamlit Community Cloud installs the runtime packages from `requirements.txt` and Linux packages from `packages.txt`.
 5. Open the generated `streamlit.app` URL and allow camera access when the browser asks. The app needs HTTPS and browser camera permission for webcam input.
 
-The pinned runtime dependencies are the versions verified locally. `requirements-dev.txt` adds the pandas dependency needed by the offline training and benchmark tools. Streamlit Community Cloud is intended for demo workloads; WebRTC can fail on restrictive corporate networks because the app uses public STUN servers and does not provide a TURN service. MediaPipe and webcam performance also depends on the viewer's browser and device. The benchmark measures only precomputed-landmark classifier inference, not deployed end-to-end performance.
+The pinned runtime dependencies target Python 3.12. MediaPipe 0.10.18 is a compatible 0.10.x release that preserves the existing legacy Hands Solutions API. `requirements-dev.txt` adds the pandas dependency needed by the offline training and benchmark tools. Streamlit Community Cloud is intended for demo workloads; WebRTC can fail on restrictive corporate networks because the app uses public STUN servers and does not provide a TURN service. MediaPipe and webcam performance also depends on the viewer's browser and device. The benchmark measures only precomputed-landmark classifier inference, not deployed end-to-end performance.
 
 ## Benchmarking
 

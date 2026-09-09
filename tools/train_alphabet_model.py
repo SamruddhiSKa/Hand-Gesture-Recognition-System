@@ -1,11 +1,19 @@
+import os
+from pathlib import Path
+
 import pandas as pd
 import joblib
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score
 
+ROOT_DIR = Path(__file__).resolve().parents[1]
+DATASET_PATH = ROOT_DIR / "landmark_dataset.csv"
+MODEL_DIR = ROOT_DIR / "models"
+MODEL_PATH = MODEL_DIR / "gesture_model.pkl"
+
 print("Loading dataset...")
-data = pd.read_csv("landmark_dataset.csv")
+data = pd.read_csv(DATASET_PATH)
 
 X = data.drop("label", axis=1)
 y = data["label"]
@@ -22,6 +30,6 @@ y_pred = model.predict(X_test)
 print("\nModel Accuracy:", accuracy_score(y_test, y_pred))
 
 # Save
-os.makedirs("models", exist_ok=True)
-joblib.dump(model, "models/gesture_model.pkl")
-print("Model saved to models/gesture_model.pkl")
+MODEL_DIR.mkdir(parents=True, exist_ok=True)
+joblib.dump(model, MODEL_PATH)
+print(f"Model saved to {MODEL_PATH}")

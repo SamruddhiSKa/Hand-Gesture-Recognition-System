@@ -224,12 +224,19 @@ st.markdown(f"""
 
 # ─── Load Resources ─────────────────────────────────────────
 model = load_model()
-detector = create_hands_detector()
+detector = None
+try:
+    detector = create_hands_detector()
+except Exception as e:
+    logging.exception("MediaPipe initialization error: %s", e)
+    st.error("Hand tracking could not be initialized. Please try again later.")
 
 # ─── Video Callback ─────────────────────────────────────────
 def video_frame_callback(frame):
     try:
         img = frame.to_ndarray(format="bgr24")
+        if detector is None or model is None:
+            return frame
         # Get flip state from shared object
         should_flip = shared.get_flip()
         
@@ -272,6 +279,8 @@ with col_feed:
         },
         async_processing=True,
     )
+    if not webrtc_ctx.state.playing:
+        st.info("Camera is not active. Click Start and allow camera access in your browser. If access was denied, enable it in the browser site settings and reload the page.")
 
 with col_predict:
     # Prediction Results

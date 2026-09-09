@@ -2,6 +2,9 @@
 
 A real-time hand gesture recognition app that converts hand signs into text using MediaPipe hand tracking and a machine learning classifier. The app runs in a Streamlit web interface and supports live webcam input, word building, and sentence history.
 
+## 🚀 Live Demo
+[Open Live Demo](https://chatgpt.com/YOUR_STREAMLIT_URL_HERE)
+
 ## Features
 
 - Live webcam-based hand detection
@@ -23,7 +26,7 @@ A real-time hand gesture recognition app that converts hand signs into text usin
 
 ## Requirements
 
-Python 3.9+ is recommended.
+Python 3.11.8 is used by the deployed and verified environment.
 
 Install the required dependencies:
 
@@ -33,9 +36,10 @@ pip install -r requirements.txt
 
 ## Training the Model
 
-If the trained model file is missing, train a new model using the provided script:
+For local training or benchmarking, install the development dependencies and train a new model if needed:
 
 ```bash
+pip install -r requirements-dev.txt
 python tools/train_alphabet_model.py
 ```
 
@@ -57,6 +61,26 @@ Then:
 2. Select the preferred camera
 3. Hold a recognized gesture to capture letters automatically
 4. Use the buttons to add letters, end a word, or clear everything
+
+## Deploying to Streamlit Community Cloud
+
+1. Push this repository to a GitHub repository. Make sure `models/gesture_model.pkl` is committed; it is required at runtime.
+2. Open [share.streamlit.io](https://share.streamlit.io/) and sign in with GitHub.
+3. Select **New app**, choose the repository and branch, and set `app.py` as the main file path.
+4. Deploy the app. Streamlit Community Cloud installs the runtime packages from `requirements.txt` and Linux packages from `packages.txt`.
+5. Open the generated `streamlit.app` URL and allow camera access when the browser asks. The app needs HTTPS and browser camera permission for webcam input.
+
+The pinned runtime dependencies are the versions verified locally. `requirements-dev.txt` adds the pandas dependency needed by the offline training and benchmark tools. Streamlit Community Cloud is intended for demo workloads; WebRTC can fail on restrictive corporate networks because the app uses public STUN servers and does not provide a TURN service. MediaPipe and webcam performance also depends on the viewer's browser and device. The benchmark measures only precomputed-landmark classifier inference, not deployed end-to-end performance.
+
+## Benchmarking
+
+Run the offline benchmark against the repository dataset and trained model:
+
+```bash
+python tools/benchmark.py --repeats 5
+```
+
+The command writes `benchmark_results.json` and prints a report containing held-out classification quality, warm model-inference latency percentiles, throughput, a majority-class baseline, dataset distribution, and model size. It measures precomputed landmark vectors only; it does not measure webcam capture, MediaPipe hand detection, WebRTC/browser overhead, network latency, or concurrent-user capacity. See `BENCHMARK_REPORT.md` for the recorded run and limitations.
 
 ## Data Collection Tools
 

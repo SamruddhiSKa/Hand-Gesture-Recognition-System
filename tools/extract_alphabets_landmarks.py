@@ -2,6 +2,7 @@ import cv2
 import os
 import pandas as pd
 import numpy as np
+from pathlib import Path
 
 # Robust imports
 try:
@@ -9,23 +10,25 @@ try:
 except:
     from mediapipe.solutions import hands as mp_hands
 
+ROOT_DIR = Path(__file__).resolve().parents[1]
+DATASET_PATH = ROOT_DIR / "dataset" / "alphabets"
+OUTPUT_PATH = ROOT_DIR / "landmark_dataset.csv"
+
 hands = mp_hands.Hands(
     static_image_mode=True,
     max_num_hands=1,
     min_detection_confidence=0.3
 )
 
-dataset_path = "dataset/alphabets"
 data, labels = [], []
 
-for label in os.listdir(dataset_path):
-    label_path = os.path.join(dataset_path, label)
+for label_path in sorted(DATASET_PATH.iterdir()):
+    label = label_path.name
     if not os.path.isdir(label_path): continue
     
     print("Processing:", label)
-    for img_name in os.listdir(label_path):
-        img_path = os.path.join(label_path, img_name)
-        image = cv2.imread(img_path)
+    for img_path in sorted(label_path.iterdir()):
+        image = cv2.imread(str(img_path))
         if image is None: continue
         
         rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -47,5 +50,5 @@ for label in os.listdir(dataset_path):
 
 df = pd.DataFrame(data)
 df["label"] = labels
-df.to_csv("landmark_dataset.csv", index=False)
+df.to_csv(OUTPUT_PATH, index=False)
 print("Dataset created:", len(df))

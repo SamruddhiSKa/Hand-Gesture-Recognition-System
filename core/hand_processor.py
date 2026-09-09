@@ -58,9 +58,13 @@ def process_frame(frame, detector, model, flip=True):
     if flip:
         frame = cv2.flip(frame, 1) # horizontal flip for selfie view
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    results = detector.process(rgb)
-    
     result = {"prediction": "", "confidence": 0.0, "hand_detected": False}
+
+    try:
+        results = detector.process(rgb)
+    except Exception as e:
+        logger.exception("MediaPipe frame processing error: %s", e)
+        return frame, result
 
     if results.multi_hand_landmarks:
         result["hand_detected"] = True
@@ -75,15 +79,15 @@ def process_frame(frame, detector, model, flip=True):
             # Predict
             features = extract_landmarks(hand_landmarks)
             if model is not None:
-                prediction = model.predict(features)[0]
-                result["prediction"] = str(prediction)
-                
-                # Get confidence if model supports predict_proba
                 try:
+                    prediction = model.predict(features)[0]
+                    result["prediction"] = str(prediction)
                     probas = model.predict_proba(features)[0]
                     result["confidence"] = round(float(np.max(probas)) * 100, 1)
                 except AttributeError:
                     result["confidence"] = 0.0
+                except Exception as e:
+                    logger.exception("Gesture prediction error: %s", e)
 
     # Draw result on frame
     if result["prediction"]:

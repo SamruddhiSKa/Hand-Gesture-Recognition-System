@@ -63,6 +63,8 @@ class SharedState:
             "confidence": 0.0,
             "hand_detected": False,
             "multiple_hands": False,
+            "landmark_count": 0,
+            "feature_shape": None,
         }
         self._lock = threading.Lock()
         self._buffer = deque(maxlen=PREDICTION_SMOOTHING_WINDOW)
@@ -107,6 +109,8 @@ class SharedState:
                     "confidence": raw_result["confidence"],
                     "hand_detected": raw_result["hand_detected"],
                     "multiple_hands": raw_result.get("multiple_hands", False),
+                    "landmark_count": raw_result.get("landmark_count", 0),
+                    "feature_shape": raw_result.get("feature_shape"),
                 }
             else:
                 self._result = raw_result
@@ -148,6 +152,13 @@ def get_ice_servers():
             }
         )
     return servers
+
+
+def sync_prediction_state():
+    """Copy the latest callback result into session state on a normal rerun."""
+    result = shared.get()
+    st.session_state.last_prediction = result.get("prediction", "")
+    st.session_state.last_confidence = result.get("confidence", 0.0)
 
 # ─── Custom CSS (Compacted) ──────────────────────────────────
 st.markdown("""
@@ -396,6 +407,10 @@ with col_predict:
 
     completed_placeholder = st.empty()
 
+# The callback runs on the WebRTC worker thread; synchronize its latest result
+# only when Streamlit performs a normal script run.
+sync_prediction_state()
+
 # ─── Button Actions ─────────────────────────────────────────
 if continue_btn and st.session_state.last_prediction:
     st.session_state.word = add_letter(st.session_state.word, st.session_state.last_prediction)
@@ -449,7 +464,11 @@ def render_live_status():
     st.caption(
         f"WebRTC: {connection_status} | ICE: browser-managed STUN | "
         f"Processor: {'active' if diagnostics['frames_received'] else 'waiting'} | "
-        f"Frames received: {diagnostics['frames_received']}"
+        f"Frames received: {diagnostics['frames_received']} | "
+        f"Landmarks: {result.get('landmark_count', 0)} | "
+        f"Features: {result.get('feature_shape') or 'waiting'} | "
+        f"Prediction: {result.get('candidate') or 'waiting'} | "
+        f"Confidence: {result.get('confidence', 0):.1f}%"
     )
 
     if not webrtc_ctx.state.playing:

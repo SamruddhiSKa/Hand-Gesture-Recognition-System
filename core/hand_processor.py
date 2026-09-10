@@ -14,7 +14,6 @@ except:
     import mediapipe.python.solutions.drawing_styles as mp_styles
 
 from config.settings import (
-    GESTURE_CONFIDENCE_THRESHOLD,
     MEDIAPIPE_MAX_HANDS,
     MEDIAPIPE_MIN_DETECTION_CONFIDENCE,
     MEDIAPIPE_MIN_TRACKING_CONFIDENCE,
@@ -23,6 +22,7 @@ from config.settings import (
 )
 
 logger = logging.getLogger(__name__)
+_feature_shape_logged = False
 
 def create_hands_detector():
     """Create a MediaPipe Hands instance."""
@@ -65,6 +65,8 @@ def process_frame(frame, detector, model, flip=True):
         "confidence": 0.0,
         "hand_detected": False,
         "multiple_hands": False,
+        "landmark_count": 0,
+        "feature_shape": None,
     }
 
     try:
@@ -79,6 +81,10 @@ def process_frame(frame, detector, model, flip=True):
             return frame, result
         result["hand_detected"] = True
         for hand_landmarks in results.multi_hand_landmarks:
+            result["landmark_count"] = len(hand_landmarks.landmark)
+            if result["landmark_count"] != 21:
+                logger.warning("Unexpected landmark count: %s", result["landmark_count"])
+                continue
             # Draw landmarks
             mp_draw.draw_landmarks(
                 frame, hand_landmarks, mp_hands.HAND_CONNECTIONS,
@@ -88,6 +94,11 @@ def process_frame(frame, detector, model, flip=True):
             
             # Predict
             features = extract_landmarks(hand_landmarks)
+            result["feature_shape"] = list(features.shape)
+            global _feature_shape_logged
+            if not _feature_shape_logged:
+                logger.info("Live gesture feature shape: %s", features.shape)
+                _feature_shape_logged = True
             if model is not None:
                 try:
                     prediction = model.predict(features)[0]
@@ -102,13 +113,16 @@ def process_frame(frame, detector, model, flip=True):
                 except AttributeError:
                     result["confidence"] = 100.0
 
-                if result["confidence"] >= GESTURE_CONFIDENCE_THRESHOLD * 100:
-                    result["prediction"] = result["candidate"]
+                result["prediction"] = result["candidate"]
 
     # Draw result on frame
     if result["prediction"]:
         label = f"{result['prediction']}"
         cv2.putText(frame, label, (10, 50), 
                     cv2.FONT_HERSHEY_SIMPLEX, 1, PREDICTION_TEXT_COLOR, 2)
+    elif result["candidate"]:
+        label = f"? {result['candidate']} ({result['confidence']:.1f}%)"
+        cv2.putText(frame, label, (10, 50),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 165, 255), 2)
 
     return frame, result

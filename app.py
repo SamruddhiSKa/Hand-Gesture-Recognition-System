@@ -400,9 +400,8 @@ COOLDOWN_REQUIRED = COOLDOWN_REQUIRED_SECONDS
 NO_HAND_TIMEOUT = NO_HAND_TIMEOUT_SECONDS
 
 
-@st.fragment(run_every="500ms")
 def render_live_status():
-    """Refresh status UI without blocking or recreating the WebRTC component."""
+    """Render the current status without creating a separate fragment lifecycle."""
     now = time.time()
     result = shared.get()
     pred = result.get("prediction", "")

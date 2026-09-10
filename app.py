@@ -10,7 +10,13 @@ from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
 from core.model_manager import load_model
 from core.hand_processor import create_hands_detector, process_frame
 from core.text_state import add_letter, clear_text, complete_word, delete_letter
-from config.settings import WEBRTC_STUN_SERVERS, APP_TITLE, APP_DESCRIPTION, APP_ICON
+from config.settings import (
+    WEBRTC_STUN_SERVERS,
+    WEBRTC_TURN_SECRET_KEYS,
+    APP_TITLE,
+    APP_DESCRIPTION,
+    APP_ICON,
+)
 from config.settings import (
     COOLDOWN_REQUIRED_SECONDS,
     HOLD_REQUIRED_SECONDS,
@@ -121,6 +127,27 @@ if 'shared_state' not in st.session_state:
     st.session_state.shared_state = SharedState()
 
 shared = st.session_state.shared_state
+
+
+def get_ice_servers():
+    """Build ICE servers without committing TURN credentials."""
+    servers = list(WEBRTC_STUN_SERVERS)
+    try:
+        turn_url = st.secrets.get(WEBRTC_TURN_SECRET_KEYS[0])
+        turn_username = st.secrets.get(WEBRTC_TURN_SECRET_KEYS[1])
+        turn_credential = st.secrets.get(WEBRTC_TURN_SECRET_KEYS[2])
+    except Exception:
+        turn_url = turn_username = turn_credential = None
+
+    if turn_url and turn_username and turn_credential:
+        servers.append(
+            {
+                "urls": [turn_url],
+                "username": turn_username,
+                "credential": turn_credential,
+            }
+        )
+    return servers
 
 # ─── Custom CSS (Compacted) ──────────────────────────────────
 st.markdown("""
@@ -320,7 +347,7 @@ with col_feed:
     webrtc_ctx = webrtc_streamer(
         key="gesture-detection",
         mode=WebRtcMode.SENDRECV,
-        rtc_configuration=RTCConfiguration({"iceServers": WEBRTC_STUN_SERVERS}),
+        rtc_configuration=RTCConfiguration({"iceServers": get_ice_servers()}),
         video_frame_callback=video_frame_callback,
         media_stream_constraints={
             "video": {

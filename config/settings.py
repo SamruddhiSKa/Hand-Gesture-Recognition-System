@@ -33,6 +33,12 @@ WEBRTC_STUN_SERVERS = [
     {"urls": ["stun:stun2.l.google.com:19302"]},
 ]
 
+WEBRTC_TURN_SECRET_KEYS = (
+    "TURN_SERVER_URL",
+    "TURN_SERVER_USERNAME",
+    "TURN_SERVER_CREDENTIAL",
+)
+
 # UI Colors (BGR for CV2)
 PREDICTION_TEXT_COLOR = (0, 255, 0)
 PREDICTION_BG_COLOR = (0, 0, 0)

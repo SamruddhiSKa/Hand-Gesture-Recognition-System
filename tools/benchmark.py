@@ -125,11 +125,15 @@ def run_benchmark(dataset_path: Path, model_path: Path, repeats: int) -> dict:
     data = pd.read_csv(dataset_path)
     features = data.drop(columns=["label"])
     labels = data["label"]
-    _, test_features, _, test_labels = train_test_split(
+    train_features, test_features, train_labels, test_labels = train_test_split(
         features, labels, test_size=TEST_SIZE, stratify=labels, random_state=RANDOM_STATE
     )
 
     model = joblib.load(model_path)
+    if getattr(model, "n_features_in_", None) != features.shape[1]:
+        raise ValueError("Model feature count does not match the dataset")
+    if set(str(label) for label in model.classes_) != set(str(label) for label in labels.unique()):
+        raise ValueError("Model classes do not match the dataset labels")
     predictions, timings = measure_predictions(model, test_features, repeats)
     correct = int(np.sum(predictions == test_labels.to_numpy()))
     total = len(test_labels)
@@ -139,7 +143,7 @@ def run_benchmark(dataset_path: Path, model_path: Path, repeats: int) -> dict:
     accepted_accuracy = float(accuracy_score(test_labels.to_numpy()[accepted], predictions[accepted]))
 
     majority = DummyClassifier(strategy="most_frequent")
-    majority.fit(features, labels)
+    majority.fit(train_features, train_labels)
     baseline_accuracy = float(accuracy_score(test_labels, majority.predict(test_features)))
 
     mean_ms = float(np.mean(timings))

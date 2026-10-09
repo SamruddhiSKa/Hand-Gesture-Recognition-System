@@ -5,7 +5,7 @@ import av
 import time
 import threading
 import logging
-from collections import deque, Counter
+from collections import deque
 from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
 from core.model_manager import load_model
 from core.hand_processor import create_hands_detector, process_frame
@@ -21,8 +21,10 @@ from config.settings import (
     COOLDOWN_REQUIRED_SECONDS,
     HOLD_REQUIRED_SECONDS,
     NO_HAND_TIMEOUT_SECONDS,
+    PREDICTION_STABILITY_MIN_VOTES,
     PREDICTION_SMOOTHING_WINDOW,
 )
+from core.prediction_smoothing import stable_prediction
 
 # ─── Page Config ────────────────────────────────────────────
 st.set_page_config(page_title=APP_TITLE, page_icon=APP_ICON, layout="wide")
@@ -52,6 +54,8 @@ if 'last_added_letter' not in st.session_state:
     st.session_state.last_added_letter = ""
 if 'hands_detector' not in st.session_state:
     st.session_state.hands_detector = None
+if 'frame_processing_lock' not in st.session_state:
+    st.session_state.frame_processing_lock = threading.Lock()
 
 # ─── Thread-safe Shared State ──────────────────────────────
 class SharedState:
@@ -98,22 +102,24 @@ class SharedState:
     def update(self, raw_result):
         with self._lock:
             if raw_result.get("prediction"):
-                self._buffer.append(raw_result["prediction"])
+                self._buffer.append((raw_result["prediction"], raw_result["confidence"]))
             else:
                 self._buffer.clear()
-            if self._buffer:
-                most_common = Counter(self._buffer).most_common(1)[0][0]
+            stable_label, stable_confidence = stable_prediction(
+                list(self._buffer), PREDICTION_STABILITY_MIN_VOTES
+            )
+            if stable_label:
                 self._result = {
-                    "prediction": most_common,
+                    "prediction": stable_label,
                     "candidate": raw_result.get("candidate", ""),
-                    "confidence": raw_result["confidence"],
+                    "confidence": stable_confidence,
                     "hand_detected": raw_result["hand_detected"],
                     "multiple_hands": raw_result.get("multiple_hands", False),
                     "landmark_count": raw_result.get("landmark_count", 0),
                     "feature_shape": raw_result.get("feature_shape"),
                 }
             else:
-                self._result = raw_result
+                self._result = {**raw_result, "prediction": ""}
 
     def set_flip(self, flip):
         with self._lock:
@@ -131,6 +137,7 @@ if 'shared_state' not in st.session_state:
     st.session_state.shared_state = SharedState()
 
 shared = st.session_state.shared_state
+frame_processing_lock = st.session_state.frame_processing_lock
 
 
 def get_ice_servers():
@@ -324,8 +331,8 @@ def video_frame_callback(frame):
             return frame
         # Get flip state from shared object
         should_flip = shared.get_flip()
-        
-        annotated_frame, result = process_frame(img, detector, model, flip=should_flip)
+        with frame_processing_lock:
+            annotated_frame, result = process_frame(img, detector, model, flip=should_flip)
         shared.update(result)
         return av.VideoFrame.from_ndarray(annotated_frame, format="bgr24")
     except Exception as e:
@@ -528,7 +535,7 @@ def render_live_status():
         )
     elif hand_visible and candidate:
         prediction_placeholder.markdown(
-            "<div class='prediction-letter' style='color: #E67E22;'>?</div><div class='status-box status-no-hand'>Gesture unclear</div><div class='auto-status'>Move your hand into a clearer pose</div>",
+            f"<div class='prediction-letter' style='color: #E67E22;'>?</div><div class='status-box status-no-hand'>Stabilizing: {candidate}</div><div class='auto-status'>Confidence {result.get('confidence', 0):.1f}%</div>",
             unsafe_allow_html=True,
         )
     elif hand_visible:

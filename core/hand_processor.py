@@ -14,12 +14,14 @@ except:
     import mediapipe.python.solutions.drawing_styles as mp_styles
 
 from config.settings import (
+    GESTURE_CONFIDENCE_THRESHOLD,
     MEDIAPIPE_MAX_HANDS,
     MEDIAPIPE_MIN_DETECTION_CONFIDENCE,
     MEDIAPIPE_MIN_TRACKING_CONFIDENCE,
     PREDICTION_TEXT_COLOR,
     PREDICTION_BG_COLOR,
 )
+from core.landmark_features import extract_landmarks
 
 logger = logging.getLogger(__name__)
 _feature_shape_logged = False
@@ -32,24 +34,6 @@ def create_hands_detector():
         min_detection_confidence=MEDIAPIPE_MIN_DETECTION_CONFIDENCE,
         min_tracking_confidence=MEDIAPIPE_MIN_TRACKING_CONFIDENCE,
     )
-
-def extract_landmarks(hand_landmarks, image_shape=None):
-    """Normalized landmarks extraction (exactly like original code)."""
-    coords = []
-    for lm in hand_landmarks.landmark:
-        coords.append([lm.x, lm.y])
-    
-    coords = np.array(coords)
-    if image_shape is not None:
-        height, width = image_shape[:2]
-        coords[:, 0] *= width / height
-    coords = coords - coords[0] # subtract wrist
-    scale = np.max(np.abs(coords))
-    
-    if scale != 0:
-        coords = coords / scale
-        
-    return coords.flatten().reshape(1, -1)
 
 def process_frame(frame, detector, model, flip=True):
     """Processes frame to return (annotated_frame, result_dict).
@@ -84,7 +68,11 @@ def process_frame(frame, detector, model, flip=True):
             return frame, result
         result["hand_detected"] = True
         for hand_landmarks in results.multi_hand_landmarks:
-            result["landmark_count"] = len(hand_landmarks.landmark)
+            try:
+                result["landmark_count"] = len(hand_landmarks.landmark)
+            except (AttributeError, TypeError):
+                logger.warning("Invalid MediaPipe hand landmarks")
+                continue
             if result["landmark_count"] != 21:
                 logger.warning("Unexpected landmark count: %s", result["landmark_count"])
                 continue
@@ -96,7 +84,11 @@ def process_frame(frame, detector, model, flip=True):
             )
             
             # Predict
-            features = extract_landmarks(hand_landmarks, frame.shape)
+            try:
+                features = extract_landmarks(hand_landmarks, frame.shape)
+            except (TypeError, ValueError, AttributeError) as e:
+                logger.warning("Invalid hand feature input: %s", e)
+                continue
             result["feature_shape"] = list(features.shape)
             global _feature_shape_logged
             if not _feature_shape_logged:
@@ -104,6 +96,11 @@ def process_frame(frame, detector, model, flip=True):
                 _feature_shape_logged = True
             if model is not None:
                 try:
+                    expected_features = getattr(model, "n_features_in_", features.shape[1])
+                    if expected_features != features.shape[1]:
+                        raise ValueError(
+                            f"Model expects {expected_features} features, received {features.shape[1]}"
+                        )
                     probas = model.predict_proba(features)[0]
                     prediction = model.classes_[int(np.argmax(probas))]
                     result["candidate"] = str(prediction)
@@ -112,6 +109,7 @@ def process_frame(frame, detector, model, flip=True):
                     logger.exception("Gesture prediction error: %s", e)
                     continue
 
-                result["prediction"] = result["candidate"]
+                if result["confidence"] >= GESTURE_CONFIDENCE_THRESHOLD * 100:
+                    result["prediction"] = result["candidate"]
 
     return frame, result

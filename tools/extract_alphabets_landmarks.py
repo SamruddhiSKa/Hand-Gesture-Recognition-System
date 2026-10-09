@@ -1,8 +1,8 @@
 import cv2
 import os
 import pandas as pd
-import numpy as np
 from pathlib import Path
+from core.landmark_features import extract_landmarks
 
 # Robust imports
 try:
@@ -36,16 +36,8 @@ for label_path in sorted(DATASET_PATH.iterdir()):
         
         if results.multi_hand_landmarks:
             for hand_landmarks in results.multi_hand_landmarks:
-                coords = []
-                for lm in hand_landmarks.landmark:
-                    coords.append([lm.x, lm.y])  # # Extracting X and Y for all 21 points
-                
-                coords = np.array(coords)
-                coords = coords - coords[0]
-                scale = np.max(np.abs(coords))
-                if scale != 0: coords = coords / scale
-                
-                data.append(coords.flatten())
+                features = extract_landmarks(hand_landmarks, image.shape)
+                data.append(features[0])
                 labels.append(label)
 
 df = pd.DataFrame(data)

@@ -4,8 +4,8 @@
   "technology": "Python, Streamlit, streamlit-webrtc, MediaPipe Hands, OpenCV, NumPy, pandas, scikit-learn, joblib",
   "benchmark_scope": "Offline warm inference on precomputed landmark vectors",
   "environment": {
-    "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
-    "platform": "Windows-11-10.0.26300-SP0",
+    "python": "3.11.8 (tags/v3.11.8:db85d51, Feb  6 2024, 22:03:32) [MSC v.1937 64 bit (AMD64)]",
+    "platform": "Windows-10-10.0.26300-SP0",
     "numpy": "1.26.4",
     "pandas": "2.2.2"
   },
@@ -93,16 +93,16 @@
     }
   },
   "performance": {
-    "mean_ms": 5.167664726901481,
-    "median_ms": 2.5412,
-    "p95_ms": 21.778409999999997,
-    "p99_ms": 28.359418,
-    "min_ms": 1.9887,
-    "max_ms": 63.4919,
-    "rows_per_second": 193.51100600514337,
-    "rows_per_minute": 11610.660360308602,
-    "timing_samples": 1959,
-    "repeats": 3
+    "mean_ms": 2.989697182235835,
+    "median_ms": 2.7369,
+    "p95_ms": 4.663139999999997,
+    "p99_ms": 5.850252000000001,
+    "min_ms": 2.0837,
+    "max_ms": 37.0234,
+    "rows_per_second": 334.4820358201473,
+    "rows_per_minute": 20068.92214920884,
+    "timing_samples": 3265,
+    "repeats": 5
   },
   "reliability": {
     "total": 653,

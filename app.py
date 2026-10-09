@@ -535,7 +535,7 @@ def render_live_status():
         )
     elif hand_visible and candidate:
         prediction_placeholder.markdown(
-            f"<div class='prediction-letter' style='color: #E67E22;'>?</div><div class='status-box status-no-hand'>Stabilizing: {candidate}</div><div class='auto-status'>Confidence {result.get('confidence', 0):.1f}%</div>",
+            f"<div class='prediction-letter'>{candidate}</div><div class='prediction-label'>Confidence {result.get('confidence', 0):.1f}%</div><div class='auto-status'>Confirming stable gesture</div>",
             unsafe_allow_html=True,
         )
     elif hand_visible:

@@ -14,7 +14,6 @@ except:
     import mediapipe.python.solutions.drawing_styles as mp_styles
 
 from config.settings import (
-    GESTURE_CONFIDENCE_THRESHOLD,
     MEDIAPIPE_MAX_HANDS,
     MEDIAPIPE_MIN_DETECTION_CONFIDENCE,
     MEDIAPIPE_MIN_TRACKING_CONFIDENCE,
@@ -109,7 +108,6 @@ def process_frame(frame, detector, model, flip=True):
                     logger.exception("Gesture prediction error: %s", e)
                     continue
 
-                if result["confidence"] >= GESTURE_CONFIDENCE_THRESHOLD * 100:
-                    result["prediction"] = result["candidate"]
+                result["prediction"] = result["candidate"]
 
     return frame, result

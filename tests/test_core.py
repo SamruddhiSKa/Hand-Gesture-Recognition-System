@@ -85,7 +85,7 @@ def test_text_state_operations():
     assert clear_text() == ("", [])
 
 
-def test_process_frame_preserves_model_prediction_contract(monkeypatch):
+def test_process_frame_returns_valid_candidate_below_old_cutoff(monkeypatch):
     landmarks = SimpleNamespace(
         landmark=[SimpleNamespace(x=0.0, y=0.0)]
         + [SimpleNamespace(x=float(index) / 20, y=float(index) / 20) for index in range(1, 21)]
@@ -101,10 +101,12 @@ def test_process_frame_preserves_model_prediction_contract(monkeypatch):
         classes_=np.array(["a", "b"]),
         predict_proba=lambda features: np.array([[0.5, 0.5]]),
     )
-    _, rejected = hand_processor.process_frame(frame.copy(), detector, low_confidence_model, flip=False)
-    assert rejected["candidate"] in {"a", "b"}
-    assert rejected["confidence"] == 50.0
-    assert rejected["prediction"] == ""
+    _, low_confidence = hand_processor.process_frame(
+        frame.copy(), detector, low_confidence_model, flip=False
+    )
+    assert low_confidence["candidate"] in {"a", "b"}
+    assert low_confidence["confidence"] == 50.0
+    assert low_confidence["prediction"] == low_confidence["candidate"]
 
     confident_model = SimpleNamespace(
         n_features_in_=42,
@@ -135,8 +137,9 @@ def test_model_contract_rejects_wrong_feature_count():
     assert model_contract_error(invalid_model) == "Expected 42 input features"
 
 
-def test_temporal_vote_requires_three_and_matches_confidence_to_winner():
+def test_temporal_vote_requires_two_and_matches_confidence_to_winner():
     history = [("h", 90.0), ("g", 99.0), ("h", 80.0), ("h", 70.0), ("g", 99.0)]
 
-    assert stable_prediction(history[:2], min_votes=3) == ("", 0.0)
-    assert stable_prediction(history, min_votes=3) == ("h", 80.0)
+    assert stable_prediction(history[:2], min_votes=2) == ("", 0.0)
+    assert stable_prediction(history[1:3], min_votes=2) == ("", 0.0)
+    assert stable_prediction(history, min_votes=2) == ("h", 80.0)

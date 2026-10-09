@@ -2,8 +2,15 @@
 
 A real-time hand gesture recognition app that converts hand signs into text using MediaPipe hand tracking and a machine learning classifier. The app runs in a Streamlit web interface and supports live webcam input, word building, and sentence history.
 
-## 🚀 Live Demo
-[Open Live Demo](https://chatgpt.com/YOUR_STREAMLIT_URL_HERE)
+## 🚀 Run Locally
+
+This project is designed to run locally in a Python 3.12 environment. Start it with:
+
+```bash
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.venv\Scripts\python.exe -m streamlit run app.py
+```
 
 ## Features
 

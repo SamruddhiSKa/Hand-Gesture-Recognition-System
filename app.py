@@ -353,7 +353,7 @@ with col_feed:
             key="cam_selector_radio"
         )
         st.session_state.camera_mode = "user" if camera_choice == "Front Camera" else "environment"
-        shared.set_flip(st.session_state.camera_mode == "user")
+        shared.set_flip(True)
 
     webrtc_ctx = webrtc_streamer(
         key="gesture-detection",
@@ -363,8 +363,8 @@ with col_feed:
         media_stream_constraints={
             "video": {
                 "facingMode": st.session_state.camera_mode,
-                "width": {"ideal": 640},
-                "height": {"ideal": 480}
+                "width": {"ideal": 320},
+                "height": {"ideal": 240}
             },
             "audio": False
         },
@@ -442,8 +442,9 @@ COOLDOWN_REQUIRED = COOLDOWN_REQUIRED_SECONDS
 NO_HAND_TIMEOUT = NO_HAND_TIMEOUT_SECONDS
 
 
+@st.fragment(run_every="500ms")
 def render_live_status():
-    """Render the current status without creating a separate fragment lifecycle."""
+    """Refresh prediction UI only after the WebRTC connection is active."""
     now = time.time()
     result = shared.get()
     pred = result.get("prediction", "")
@@ -562,5 +563,15 @@ def render_live_status():
         )
 
 
-render_live_status()
+if webrtc_ctx.state.playing:
+    render_live_status()
+else:
+    prediction_placeholder.markdown(
+        "<div class='status-box status-inactive'>Camera connection is starting...</div>",
+        unsafe_allow_html=True,
+    )
+    word_placeholder.markdown(
+        "<div class='word-display'><div class='word-text-empty'>-</div></div>",
+        unsafe_allow_html=True,
+    )
 

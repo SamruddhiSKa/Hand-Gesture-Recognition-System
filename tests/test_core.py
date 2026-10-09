@@ -17,6 +17,16 @@ def test_extract_landmarks_translates_and_scales_wrist():
     np.testing.assert_allclose(result, [[0.0, 0.0, 0.5, 1.0]])
 
 
+def test_extract_landmarks_matches_square_training_coordinates():
+    landmarks = SimpleNamespace(
+        landmark=[SimpleNamespace(x=0.0, y=0.0), SimpleNamespace(x=1.0, y=2.0)]
+    )
+
+    result = extract_landmarks(landmarks, image_shape=(480, 640, 3))
+
+    np.testing.assert_allclose(result, [[0.0, 0.0, 2 / 3, 1.0]])
+
+
 def test_process_frame_returns_safe_no_hand_result():
     detector = SimpleNamespace(
         process=lambda image: SimpleNamespace(multi_hand_landmarks=[])

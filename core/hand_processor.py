@@ -33,13 +33,16 @@ def create_hands_detector():
         min_tracking_confidence=MEDIAPIPE_MIN_TRACKING_CONFIDENCE,
     )
 
-def extract_landmarks(hand_landmarks):
+def extract_landmarks(hand_landmarks, image_shape=None):
     """Normalized landmarks extraction (exactly like original code)."""
     coords = []
     for lm in hand_landmarks.landmark:
         coords.append([lm.x, lm.y])
     
     coords = np.array(coords)
+    if image_shape is not None:
+        height, width = image_shape[:2]
+        coords[:, 0] *= width / height
     coords = coords - coords[0] # subtract wrist
     scale = np.max(np.abs(coords))
     
@@ -93,7 +96,7 @@ def process_frame(frame, detector, model, flip=True):
             )
             
             # Predict
-            features = extract_landmarks(hand_landmarks)
+            features = extract_landmarks(hand_landmarks, frame.shape)
             result["feature_shape"] = list(features.shape)
             global _feature_shape_logged
             if not _feature_shape_logged:
@@ -101,28 +104,14 @@ def process_frame(frame, detector, model, flip=True):
                 _feature_shape_logged = True
             if model is not None:
                 try:
-                    prediction = model.predict(features)[0]
+                    probas = model.predict_proba(features)[0]
+                    prediction = model.classes_[int(np.argmax(probas))]
                     result["candidate"] = str(prediction)
+                    result["confidence"] = round(float(np.max(probas)) * 100, 1)
                 except Exception as e:
                     logger.exception("Gesture prediction error: %s", e)
                     continue
 
-                try:
-                    probas = model.predict_proba(features)[0]
-                    result["confidence"] = round(float(np.max(probas)) * 100, 1)
-                except AttributeError:
-                    result["confidence"] = 100.0
-
                 result["prediction"] = result["candidate"]
-
-    # Draw result on frame
-    if result["prediction"]:
-        label = f"{result['prediction']}"
-        cv2.putText(frame, label, (10, 50), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, PREDICTION_TEXT_COLOR, 2)
-    elif result["candidate"]:
-        label = f"? {result['candidate']} ({result['confidence']:.1f}%)"
-        cv2.putText(frame, label, (10, 50),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 165, 255), 2)
 
     return frame, result

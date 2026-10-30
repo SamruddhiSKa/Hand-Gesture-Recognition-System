@@ -1,0 +1,4 @@
+model,median_ms,p95_ms,mean_ms,warmup_calls,timed_calls,repeats,timed_rows_per_repeat,scaler_included,timed_operation
+random_forest,2.761300012934953,4.854620009427884,3.061266493171334,50,3265,5,653,False,single-row pipeline.predict
+knn,1.9086999964201823,2.5621999957365915,1.8338011943774046,50,3265,5,653,True,single-row pipeline.predict
+rbf_svm,1.054299995303154,2.2606000042287624,1.2285818071297125,50,3265,5,653,True,single-row pipeline.predict

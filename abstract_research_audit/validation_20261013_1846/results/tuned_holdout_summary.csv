@@ -1,0 +1,4 @@
+model,best_params,best_cv_macro_f1,accuracy,macro_f1,weighted_f1,test_rows
+random_forest,"{'classifier__max_depth': 20, 'classifier__n_estimators': 300}",0.932257815480178,0.9617151607963247,0.9545232596260715,0.9612809262076217,653
+knn,"{'classifier__n_neighbors': 3, 'classifier__weights': 'distance'}",0.9314816872792984,0.9601837672281777,0.952679018812682,0.9605862142012899,653
+rbf_svm,"{'classifier__C': 100, 'classifier__gamma': 'scale'}",0.9425270085787905,0.9525267993874426,0.9424425722213537,0.9521646712007528,653

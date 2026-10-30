@@ -1,0 +1,6 @@
+model,actual,predicted,count
+rbf_svm,6,w,4
+rbf_svm,0,o,3
+rbf_svm,v,2,3
+rbf_svm,5,4,2
+rbf_svm,o,0,2

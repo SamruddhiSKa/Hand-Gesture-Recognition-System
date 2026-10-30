@@ -1,0 +1,94 @@
+{
+  "experiment": "Corrected baseline classifier-only latency measurement",
+  "dataset": {
+    "path": "E:\\Gauri\\projects\\Hand Gesture Recognition System\\landmark_dataset.csv",
+    "sha256": "29c682b9bd6d2fa63417edcb745ad5df6a188fc3e84e9a954a1eb43900ee1ca9",
+    "rows": 3263,
+    "features": 42,
+    "classes": 36
+  },
+  "split": {
+    "method": "stratified train_test_split",
+    "test_size": 0.2,
+    "random_state": 42,
+    "train_rows": 2610,
+    "test_rows": 653,
+    "train_indices_sha256": "ae01264d1265f65b6162b35e878a4e86c1790da782ea676549640c8fd257a226",
+    "test_indices_sha256": "66f2ff3c53811595a5478c316fef1c83d07a991da6e171284dacbcabd4e32d00"
+  },
+  "method": "Each fixed baseline is fitted on the training partition; 50 warm-up single-row predictions; then five passes over all 653 test rows timed individually with time.perf_counter. Row slicing excluded. KNN and SVM scaling included in Pipeline.predict. Camera, MediaPipe, feature extraction, rendering, and UI excluded.",
+  "environment": {
+    "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+    "platform": "Windows-11-10.0.26300-SP0",
+    "numpy": "1.26.4",
+    "pandas": "2.2.2",
+    "scikit_learn": "1.5.2",
+    "scipy": "1.17.1",
+    "joblib": "1.5.2",
+    "hardware": {
+      "cpu_model": "13th Gen Intel(R) Core(TM) i5-1335U",
+      "installed_ram_gib": 15.692092895507812,
+      "query_error": null
+    }
+  },
+  "settings": {
+    "random_forest": {
+      "n_estimators": 100,
+      "random_state": 42
+    },
+    "knn": {
+      "n_neighbors": 5,
+      "weights": "uniform",
+      "metric": "euclidean",
+      "scaler": "StandardScaler fitted on training rows"
+    },
+    "rbf_svm": {
+      "kernel": "rbf",
+      "C": 1.0,
+      "gamma": "scale",
+      "scaler": "StandardScaler fitted on training rows"
+    }
+  },
+  "latency": {
+    "rows": [
+      {
+        "model": "random_forest",
+        "median_ms": 2.761300012934953,
+        "p95_ms": 4.854620009427884,
+        "mean_ms": 3.061266493171334,
+        "warmup_calls": 50,
+        "timed_calls": 3265,
+        "repeats": 5,
+        "timed_rows_per_repeat": 653,
+        "scaler_included": false,
+        "timed_operation": "single-row pipeline.predict"
+      },
+      {
+        "model": "knn",
+        "median_ms": 1.9086999964201823,
+        "p95_ms": 2.5621999957365915,
+        "mean_ms": 1.8338011943774046,
+        "warmup_calls": 50,
+        "timed_calls": 3265,
+        "repeats": 5,
+        "timed_rows_per_repeat": 653,
+        "scaler_included": true,
+        "timed_operation": "single-row pipeline.predict"
+      },
+      {
+        "model": "rbf_svm",
+        "median_ms": 1.054299995303154,
+        "p95_ms": 2.2606000042287624,
+        "mean_ms": 1.2285818071297125,
+        "warmup_calls": 50,
+        "timed_calls": 3265,
+        "repeats": 5,
+        "timed_rows_per_repeat": 653,
+        "scaler_included": true,
+        "timed_operation": "single-row pipeline.predict"
+      }
+    ],
+    "warnings": []
+  },
+  "errors": []
+}
